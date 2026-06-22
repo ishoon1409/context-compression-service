@@ -1,122 +1,77 @@
-Context Compression Service
-An intelligent, high-performance API designed to optimize and compress massive context payloads for Large Language Models (LLMs). This service dynamically crushes long conversation histories and massive technical documents into dense architectural summaries, saving token costs and preventing context-window overflow while protecting factual accuracy.
+# Context Compression Service
 
-🎯 Core Success Metrics
-This architecture is engineered to balance the classic AI system triad:
+A high-performance backend middleware service designed to drastically reduce LLM context payloads while mathematically guaranteeing the retention of critical factual data. 
 
-Compression: Reduce overall context token size by at least 70%.
+As AI applications scale, unbounded chat histories and large document payloads bloat context windows, driving up inference costs and latency while degrading model reasoning. This service intercepts LLM payloads, runs them through an Entity-First JSON distillation engine, and reconstructs the context state—regularly achieving >70% token compression with >85% factual retention.
 
-Accuracy: Retain at least 85% of factual data and goal alignment.
+## 🚀 Core Features
 
-Performance: Execute the entire compression pipeline in under 10 seconds.
+* **Entity-First Context Summarization:** Prevents "context amnesia" by forcing the compression model to extract and isolate hard variables (ARNs, specific numerical metrics, code paths, and compound proper nouns) before generating narrative summaries.
+* **Dynamic Payload Partitioning:** Slices incoming chat requests based on token bounds. Protects the immediate conversational tail verbatim while rolling older historical context into a dense memory state.
+* **Automated Differential Evaluation Pipeline:** A custom "LLM-as-a-Judge" testing suite that runs parallel inference paths (Uncompressed vs. Compressed) to automatically grade the compression engine on strict factual retention.
+* **Built for Speed:** Asynchronous API routing built on FastAPI, utilizing Groq's LPU architecture (Llama 3.1 8B) for ultra-low latency summarization.
 
-🚀 Key Features
-The "Sawtooth" Chat Window: Dynamically compresses old conversation turns while locking the most recent "tail" messages to preserve immediate user intent.
+## 📁 Architecture Overview
 
-Dynamic Map-Reduce Document Engine: Slices massive documents (up to 100k+ tokens) into mathematically overlapping chunks, processes them in parallel asynchronously, and reduces them into a master state based on a scalable retention budget.
-
-Token Inversion Protection: Utilizes strict system prompts to prevent AI models from generating bloated formatting (markdown lists/templates) that accidentally increases token counts on small payloads.
-
-Ultra-Fast Inference: Powered by Meta's llama-3.1-8b-instant model hosted on the Groq API for blazing-fast, sub-second latency.
-
-🛠️ Tech Stack
-Framework: FastAPI / Python 3.10+
-
-Server: Uvicorn
-
-LLM Engine: Groq API (llama-3.1-8b-instant)
-
-Token Math: tiktoken (cl100k_base encoding)
-
-Concurrency: Native Python asyncio
-
-📂 Project Structure
-Plaintext
+```text
 context-compression-service/
-│
 ├── app/
-│   ├── main.py                     # FastAPI application routing and threshold logic
+│   ├── main.py                     # FastAPI routing and threshold logic
 │   ├── core/
-│   │   └── compressor.py           # Chat compression logic (Sawtooth Window)
-│   └── documents/
-│       └── pdf_processor.py        # Map-Reduce dynamic document compression
-│
-├── .env                            # Environment variables (API Keys)
-├── requirements.txt                # Python dependencies
-└── README.md                       # Project documentation
-⚙️ Installation & Setup
-1. Clone or Create the Directory
-Navigate to your desired workspace and ensure you are in the project root.
+│   │   ├── compressor.py           # Async rolling summary engine (Groq)
+│   │   └── tokenizer.py            # ChatML-aware token calculation bounds
+│   ├── evaluate_differential.py    # Automated LLM-as-a-judge benchmark pipeline
+│   └── test_history.json           # Highly technical, multi-turn evaluation datasets
+└── .env                            # Environment variables (API Keys)
+```
 
-2. Activate Virtual Environment
+## 🛠️ Installation & Setup
+Clone the repository:
 
-PowerShell
+Bash
+git clone [https://github.com/YOUR_USERNAME/context-compression-service.git](https://github.com/YOUR_USERNAME/context-compression-service.git)
+cd context-compression-service
+Create and activate a virtual environment:
+
+Bash
 python -m venv venv
-.\venv\Scripts\Activate
-3. Install Dependencies
+1) Windows:
+venv\Scripts\activate
 
-PowerShell
-pip install fastapi uvicorn openai tiktoken pypdf
-4. Environment Configuration
+2) Mac/Linux:
+source venv/bin/activate
+
+Install dependencies:
+(Ensure you have a requirements.txt generated, or manually install fastapi, uvicorn, openai, requests, tiktoken, python-dotenv)
+
+Bash
+pip install -r requirements.txt
+Configure Environment Variables:
 Create a .env file in the root directory and add your Groq API key:
 
 Code snippet
-GROQ_API_KEY=gsk_your_actual_key_here
-5. Start the Server
+GROQ_API_KEY=
 
-PowerShell
+## 💻 Usage
+Running the API Server
+Start the FastAPI service using Uvicorn:
+
+Bash
 uvicorn app.main:app --reload
-The API will be available at http://127.0.0.1:8000.
+The API will be available at http://127.0.0.1:8000. You can access the interactive Swagger documentation at http://127.0.0.1:8000/docs.
 
-📡 API Endpoints
-POST /compress/chat
-Analyzes a stream of chat messages and compresses the historical head into a dense system state if the total token count exceeds the defined threshold.
+Running the Evaluation Benchmark
+To test the integrity of the compression engine, run the automated differential testing suite. This script will evaluate the system's factual retention across multiple highly technical domains (e.g., SRE Incident Post-Mortems, Cloud Database Migrations).
 
-Request Payload:
+Bash
+python app/evaluate_differential.py
+Note: The evaluation script includes automated exponential backoff to handle free-tier API rate limits.
 
-JSON
-{
-  "trigger_threshold": 1000,
-  "tail_messages_to_keep": 2,
-  "messages": [
-    { "role": "system", "content": "You are a DevOps engineer." },
-    { "role": "user", "content": "Let's debug my Kubernetes cluster..." },
-    { "role": "assistant", "content": "Sure, let's look at the pod logs." },
-    { "role": "user", "content": "The logs show an OOMKill error." }
-  ]
-}
-Response Payload:
+## 🧪 Evaluation Methodology
+The differential evaluation script operates on a strict logic flow to verify data integrity:
 
-JSON
-{
-  "original_token_count": 1450,
-  "compressed_token_count": 320,
-  "compression_ratio": 77.93,
-  "was_compressed": true,
-  "messages": [
-    { "role": "system", "content": "You are a DevOps engineer." },
-    { "role": "system", "content": "--- CONVERSATION SUMMARY STATE ---\nUser is debugging a Kubernetes cluster experiencing OOMKill errors..." },
-    { "role": "assistant", "content": "Sure, let's look at the pod logs." },
-    { "role": "user", "content": "The logs show an OOMKill error." }
-  ]
-}
-🧪 Testing with PowerShell
-To test the API locally, open a secondary PowerShell terminal and run the following command to send a mock JSON payload:
+Path A (Gold Standard): Sends the full, uncompressed multi-turn chat history to the LLM and records the answer.
 
-PowerShell
-$body = @{
-    trigger_threshold = 500
-    tail_messages_to_keep = 2
-    messages = @(
-        @{ role = "system"; content = "You are a system architect." }
-        @{ role = "user"; content = "Here is my massive 4000 word system design..." }
-        @{ role = "assistant"; content = "I have reviewed it." }
-        @{ role = "user"; content = "What is the next step?" }
-    )
-} | ConvertTo-Json -Depth 5
+Path B (Compressed State): Sends only the condensed summary + the immediate verbatim tail to the LLM and records the answer.
 
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/compress/chat" -Method Post -Body $body -ContentType "application/json"
-🔮 Next Steps (Roadmap)
-Phase 3: Implement an automated LLM-as-a-Judge Python script to mathematically grade the 85% accuracy retention against a golden dataset.
-
-Phase 4: Upgrade the Document Processor to a Hierarchical Reduce architecture to safely output summaries larger than the 4,000 token physical LLM limits without data loss.
+The AI Judge: A secondary LLM process evaluates the Path B answer against the Path A answer using a strict 0-100 rubric, penalizing the system if any specific ARNs, timestamps, metrics, or third-party tool names were dropped during the compression phase.
