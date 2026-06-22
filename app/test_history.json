@@ -1,0 +1,112 @@
+{
+  "test_suites": [
+    {
+      "scenario_id": "SUITE_01_DB_MIGRATION",
+      "name": "Cloud Database Migration Strategy",
+      "trigger_threshold": 250,
+      "tail_messages_to_keep": 2,
+      "test_questions": [
+        {
+          "type": "exact_match",
+          "query": "What is the specific size and write throughput metric of the legacy database?"
+        },
+        {
+          "type": "exact_match",
+          "query": "What specific AWS KMS Key ARN must be used for encrypting data at rest?"
+        },
+        {
+          "type": "exact_match",
+          "query": "What is the exact automated fallback Lambda function name if lag spikes?"
+        },
+        {
+          "type": "open_ended",
+          "query": "Summarize the automated fallback procedure if replication lag spikes, and explain how the migration script avoids locking the application tables."
+        }
+      ],
+      "messages": [
+        { "role": "system", "content": "You are a principal systems architect guiding a cloud database migration." },
+        { "role": "user", "content": "Let's review the parameters for migrating the legacy cluster to AWS. What are our core database constraints?" },
+        { "role": "assistant", "content": "We are migrating a 4.2 TB PostgreSQL database. The primary constraint is zero-downtime for the transactional API. Our current write throughput peaks at 8,500 IOPS, and we must maintain a replication lag of under 2.5 seconds during the sync phase. The target system is an AWS Aurora Serverless v2 cluster deployed across us-east-1a and us-east-1b." },
+        { "role": "user", "content": "Understood. Who is managing the network layer, and what is the security configuration?" },
+        { "role": "assistant", "content": "Sarah Jenkins from the NetSec team is owning the Direct Connect layout. We are utilizing a dedicated 10 Gbps circuit with MACsec encryption enabled. For the database security groups, ingress is strictly restricted to the application subnet CIDR `10.195.42.0/24` on port 5432. All data at rest must be encrypted using the custom AWS KMS Key ARN `arn:aws:kms:us-east-1:112233445566:key/db-migration-key-v4`." },
+        { "role": "user", "content": "What is the fallback plan if the replication lag spikes past our threshold?" },
+        { "role": "assistant", "content": "If lag exceeds 5.0 seconds for more than 3 consecutive polling intervals (configured at 30-second windows), the automated AWS Lambda function `tg-migration-fallback-handler` will gracefully throttle non-critical read replicas to allocate more IOPS bandwidth to the primary replication stream." },
+        { "role": "user", "content": "Excellent. Now, how do we initialize the schema migration script without locking the application tables?" },
+        { "role": "assistant", "content": "You must execute the migration using the Liquibase CLI with the `--lockWaitTime=300` flag set. Ensure all new indexes are created using the `CONCURRENTLY` keyword in PostgreSQL to prevent table locks." },
+        { "role": "user", "content": "I am ready to run the first dry-run of the schema script now. What command do I use?" }
+      ]
+    },
+    {
+      "scenario_id": "SUITE_02_KAFKA_STREAMING",
+      "name": "Event-Driven Microservices Optimization",
+      "trigger_threshold": 300,
+      "tail_messages_to_keep": 2,
+      "test_questions": [
+        {
+          "type": "exact_match",
+          "query": "What is the retention period policy configured for the order-processing topic?"
+        },
+        {
+          "type": "exact_match",
+          "query": "Which specific serialization framework was selected to replace JSON payload strings?"
+        },
+        {
+          "type": "exact_match",
+          "query": "What is the exact consumer group rebalance timeout threshold setting?"
+        },
+        {
+          "type": "open_ended",
+          "query": "Explain the rationale behind migrating from raw JSON payloads to the new serialization framework, and describe how the team mitigated constant consumer rebalances."
+        }
+      ],
+      "messages": [
+        { "role": "system", "content": "You are a principal data engineer specializing in Apache Kafka event streaming systems." },
+        { "role": "user", "content": "We are facing consumer lag spikes in our order-processing cluster during peak hours. What is our current cluster layout and configuration?" },
+        { "role": "assistant", "content": "The cluster consists of 6 brokers running Kafka v3.4 on m6g.2xlarge instances. The primary topic `order-processing-v2` has 24 partitions, a replication factor of 3, and a strict retention period policy of 7 days (168 hours). Our message throughput averages 12,500 messages per second, peaking at 35,000 messages per second during sales events." },
+        { "role": "user", "content": "What schemas and compression algorithms are we currently enforcing on these topics?" },
+        { "role": "assistant", "content": "To reduce network I/O, we recently migrated from raw JSON payloads to Apache Avro serialization using the Confluent Schema Registry version 7.3. The compression codec is configured at the topic level as `zstd` with a compression level of 3, which reduced our overall storage footprint by 42% compared to standard GZIP compression variants." },
+        { "role": "user", "content": "How are the consumer groups configured to handle processing delays without triggering constant rebalances?" },
+        { "role": "assistant", "content": "We modified the consumer application configurations to adjust for heavy computing loops. The `max.poll.interval.ms` (rebalance timeout threshold) is set to 300,000 milliseconds (5 minutes), and `max.poll.records` is restricted to 250 records per poll. The consumer group identifier running this logic is `order-fulfillment-service-group`." },
+        { "role": "user", "content": "If a partition replica falls out of the ISR list, what is our automatic recovery window?" },
+        { "role": "assistant", "content": "The replica configuration sets `replica.lag.time.max.ms` to 30,000 milliseconds. If a broker fails to fetch from the leader within this 30-second window, it is dropped from the In-Sync Replicas list, and a PagerDuty alert is dispatched to the data platform on-call team." },
+        { "role": "user", "content": "I need to check the current ISR status of the brokers via terminal now. Give me the CLI command." }
+      ]
+    },
+    {
+      "scenario_id": "SUITE_03_SRE_INCIDENT",
+      "name": "Production SRE Incident Post-Mortem",
+      "trigger_threshold": 250,
+      "tail_messages_to_keep": 2,
+      "test_questions": [
+        {
+          "type": "exact_match",
+          "query": "What specific API path endpoint triggered the initial out-of-memory exception?"
+        },
+        {
+          "type": "exact_match",
+          "query": "What memory leak tracking tool was injected into the production container process?"
+        },
+        {
+          "type": "exact_match",
+          "query": "What exact environment variable flag disables the aggressive heap caching optimization?"
+        },
+        {
+          "type": "open_ended",
+          "query": "Summarize the root cause of the memory leak in the containerized service and explain how the temporary hotfix stabilized the system before the permanent code patch was deployed."
+        }
+      ],
+      "messages": [
+        { "role": "system", "content": "You are an incident commander leading a high-severity production site reliability engineering triaging session." },
+        { "role": "user", "content": "Let's summarize the timeline for the critical memory leak incident that degraded the payment gateway yesterday. When did it start?" },
+        { "role": "assistant", "content": "The incident began at 14:22 UTC following the deployment of release v4.11.2. The containerized service running on AWS ECS Fargate threw repeated Out-Of-Memory (OOM) exceptions. The kernel killed the process after residential memory usage hit the strict 4GB task allocation limit. The specific endpoint triggering this leak was the `/api/v2/checkout/validate-promo` path." },
+        { "role": "user", "content": "What diagnostic tools did the team inject to capture the heap profiling state before the containers crashed?" },
+        { "role": "assistant", "content": "David from the core platform team attached the `jemalloc` profiler to the running process inside the Docker container using a custom runtime wrapper script. The generated heap allocation map revealed that an unclosed HTTP connection pooling client was leaking approximately 12MB of heap memory per 1,000 inbound requests due to an unreleased byte buffer reference." },
+        { "role": "user", "content": "What temporary patch or configuration flag was applied to stabilize the system while the fix is reviewed?" },
+        { "role": "assistant", "content": "We applied a hotfix environment variable adjustment to the ECS Task Definition. Setting `ENABLE_AGGRESSIVE_HEAP_CACHING=false` bypasses the local thread-level memory cache entirely, forcing immediate garbage collection sweeps. We also temporarily scaled the minimum task count from 4 instances up to 12 instances to spread out the request load." },
+        { "role": "user", "content": "Understood. Has the permanent code fix been merged into the main release branch yet?" },
+        { "role": "assistant", "content": "Yes, the leak was traced to an unclosed block in the `PromoVerificationController.java` file. The patch replaces the raw connection initialization with a robust Java try-with-resources statement block. It has passed integration testing under PR #8842." },
+        { "role": "user", "content": "I am prepared to trigger the automated CI/CD deployment pipeline for this patch now. What target branch should I specify?" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "conversation_id": "test_001_cpp_dijkstra",
+    "history": [
+      {"role": "system", "content": "You are a professional software engineering advisor."},
+      {"role": "user", "content": "Hey, I need to implement a graph algorithm for routing network packets path systems in C++."},
+      {"role": "assistant", "content": "For path systems routing, Dijkstra's algorithm or A* search is ideal. Let's use an adjacency list architecture representation for vertex mapping."},
+      {"role": "user", "content": "Awesome. The graph scale contains around 50,000 nodes and roughly 500,000 edges. Performance matters a lot here."},
+      {"role": "assistant", "content": "Under that scale, you must guarantee an O(E log V) running time constraint bound. Do not use standard linear vectors to locate minimum weights."},
+      {"role": "user", "content": "Got it. So I should use std::priority_queue? How should I store distances safely?"},
+      {"role": "assistant", "content": "Yes, use std::priority_queue with a custom comparison struct. For distances, allocate a std::vector<long long> initialized to infinity to safeguard against edge weight overflows."},
+      {"role": "user", "content": "Understood. Let's write the priority queue structure definition initialization first. What arguments do I give it?"}
+    ],
+    "evaluation_question": "What structural container and data configuration specifications did the assistant mandate for safety and computational efficiency bounds?",
+    "ground_truth_answer": "The assistant mandated using std::priority_queue paired with a custom comparison structure to achieve O(E log V) bounds, and a std::vector<long long> initialized to infinity to prevent overflow issues."
+  }
+]
