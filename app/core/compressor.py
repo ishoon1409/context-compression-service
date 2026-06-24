@@ -17,35 +17,34 @@ async def generate_rolling_summary(historical_head: List[Dict[str, Any]], existi
     
     context_prefix = f"Existing Continuous Summary State:\n{existing_summary}\n\n" if existing_summary else ""
     
-    # UPGRADED: Fierce Data Retention Prompt
+    # UPGRADED: Fierce Data Retention Prompt (Markdown Format)
     prompt = (
         "You are an advanced technical compression engine. "
-        "Your task is to compress the chat history into a dense STATE object.\n\n"
-        "CRITICAL INSTRUCTION: You must extract and perfectly preserve all technical parameters, numerical metrics, proper nouns, system identifiers, and configurations.\n\n"
-        "Return ONLY a valid JSON object with exactly two keys:\n"
-        "1. 'entities': An array of strings containing every specific metric, ARN, identifier, and proper noun mentioned.\n"
-        "2. 'narrative': A highly abbreviated summary of the events.\n\n"
+        "Your task is to distill the chat history into a dense, structured Markdown summary.\n\n"
+        "CRITICAL INSTRUCTION: You must extract and perfectly preserve all technical parameters, "
+        "numerical metrics, proper nouns, system identifiers, and configurations.\n\n"
+        "You MUST adhere strictly to this format. Do not use JSON. Use the exact markdown headers below:\n\n"
+        "### 🚨 Core Issue\n"
+        "[1-2 sentences explaining the primary problem or goal]\n\n"
+        "### 💾 Critical State Variables\n"
+        "* **Environment:** [OS, Frameworks, Cloud instances]\n"
+        "* **Files Modified:** [List specific files]\n"
+        "* **Hard Metrics:** [List specific numbers, IDs, ARNs, or parameters]\n\n"
+        "### ✅ Resolution / Current State\n"
+        "[1-2 sentences explaining exactly how the issue was resolved or what the final agreed-upon state is.]\n\n"
         f"{context_prefix}New conversation turns:\n{formatted_history}"
     )
 
     response = await client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[
-            {"role": "system", "content": "You are a JSON-only data extraction and compression API."},
+            {"role": "system", "content": "You are a highly precise Markdown extraction and compression API."},
             {"role": "user", "content": prompt}
         ],
         temperature=0.0,
-        max_tokens=800, # Increased slightly to accommodate the JSON bracket structure
-        response_format={"type": "json_object"} # <--- THE CRITICAL FIX
+        max_tokens=800
+        # The JSON response_format parameter has been completely removed
     )
     
-    # Parse the JSON and format it into a dense string for the next turn
-    import json
-    try:
-        data = json.loads(response.choices[0].message.content)
-        entities_str = " | ".join(data.get("entities", []))
-        narrative = data.get("narrative", "")
-        return f"CRITICAL ENTITIES: {entities_str}\nNARRATIVE: {narrative}"
-    except json.JSONDecodeError:
-        return response.choices[0].message.content.strip()
-    
+    # Return the pure, beautifully formatted Markdown string directly to the frontend
+    return response.choices[0].message.content.strip()

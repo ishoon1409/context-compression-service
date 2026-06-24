@@ -10,7 +10,13 @@ from app.core.tokenizer import calculate_tokens
 from app.core.compressor import generate_rolling_summary
 from app.documents.pdf_processor import extract_text_from_pdf_bytes, execute_map_reduce_summary
 from app.documents.nlp_processor import extractive_summarize
+from app.core.document_processor import extract_text_from_pdf, chunk_text_by_tokens
+from app.core.pdf_compressor import run_map_reduce_pipeline
+import tiktoken
+from app.core.evaluator import run_differential_evaluation
 
+from fastapi.responses import HTMLResponse
+import os
 
 app = FastAPI(
     title="Context Compression Service",
@@ -41,6 +47,10 @@ class DocumentCompressionResponse(BaseModel):
     compressed_summary_tokens: int
     compression_ratio: float
     summary: str
+
+class EvaluationRequest(BaseModel):
+    chat_history: List[Dict[str, str]]
+    new_question: str
 
 # --- Endpoints ---
 @app.post("/compress/chat", response_model=ChatCompressionResponse)
@@ -126,43 +136,45 @@ async def compress_pdf_document(file: UploadFile = File(...)):
 
 @app.post("/compress/pdf")
 async def compress_pdf_endpoint(file: UploadFile = File(...)):
-    """
-    Accepts a PDF file upload, extracts the text, and runs it through 
-    the Map-Reduce compression pipeline.
-    """
-    # 1. Validate file extension
-    if not file.filename.lower().endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Unsupported file format. Please upload a PDF.")
-        
+    """Accepts a PDF upload, chunks it, and runs a Map-Reduce summary pipeline."""
+    
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    
     try:
-        # 2. Read the binary file stream from the HTTP request
-        pdf_bytes = await file.read()
+        # 1. Read the file into memory
+        file_bytes = await file.read()
         
-        # 3. Extract the raw text using your existing helper function
-        raw_text = extract_text_from_pdf_bytes(pdf_bytes)
-        
-        # Check if extraction failed or returned your custom error string
-        if raw_text.startswith("[Error"):
-            raise HTTPException(status_code=500, detail=raw_text)
-            
+        # 2. Extract raw text
+        raw_text = extract_text_from_pdf(file_bytes)
         if not raw_text.strip():
-            raise HTTPException(status_code=400, detail="The PDF contains no extractable text.")
+            raise HTTPException(status_code=400, detail="Could not extract any text from the PDF. It may be an image-based scan.")
             
-        # 4. Pass the text into your Map-Reduce engine
-        compression_result = await execute_map_reduce_summary(raw_text)
+        # 3. Calculate original token size for metrics
+        encoding = tiktoken.get_encoding("cl100k_base")
+        original_token_count = len(encoding.encode(raw_text))
         
-        # 5. Return the final metrics and master summary to the user
+        # 4. Chunk the text
+        chunks = chunk_text_by_tokens(raw_text, chunk_size=2000, overlap=200)
+        
+        # 5. Run Map-Reduce Pipeline
+        final_summary = await run_map_reduce_pipeline(chunks)
+        
+        # 6. Calculate compressed token size
+        compressed_token_count = len(encoding.encode(final_summary))
+        compression_ratio = round((1.0 - (compressed_token_count / original_token_count)) * 100, 2)
+        
         return {
-            "success": True,
             "filename": file.filename,
-            "original_token_count": compression_result["original_token_count"],
-            "compressed_token_count": compression_result["compressed_token_count"],
-            "compression_ratio": compression_result["compression_ratio"],
-            "master_summary": compression_result["text"]
+            "original_token_count": original_token_count,
+            "compressed_token_count": compressed_token_count,
+            "compression_ratio": compression_ratio,
+            "total_chunks_processed": len(chunks),
+            "summary": final_summary
         }
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF Processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"PDF Processing Error: {str(e)}")
     
 @app.post("/compress/pdf/local", response_model=DocumentCompressionResponse)
 async def compress_pdf_local_nlp(file: UploadFile = File(...)):
@@ -193,3 +205,23 @@ async def compress_pdf_local_nlp(file: UploadFile = File(...)):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Local NLP Processing failed: {str(e)}")
+    
+    
+@app.get("/", response_class=HTMLResponse)
+async def serve_dashboard():
+    """Serves the clean unified user interface directly on the root endpoint."""
+    frontend_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "index.html")
+    
+    if not os.path.exists(frontend_path):
+        return """<h1>Dashboard file not found.</h1><p>Please ensure index.html exists in the frontend folder.</p>"""
+        
+    with open(frontend_path, "r", encoding="utf-8") as f:
+        return f.read()
+    
+@app.post("/evaluate/chat")
+async def evaluate_chat_endpoint(request: EvaluationRequest):
+    try:
+        results = await run_differential_evaluation(request.chat_history, request.new_question)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
