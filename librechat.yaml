@@ -1,0 +1,11 @@
+endpoints:
+  custom:
+    - name: "Context Compression Engine"
+      apiKey: "sk-fake-key-not-needed" # Your proxy ignores this
+      baseURL: "http://host.docker.internal:8000/v1" # See note below about Docker!
+      models: 
+        default: ["llama-3.1-8b-instant"] # Or whatever model you set in your proxy
+        fetch: false
+      titleConvo: true
+      titleModel: "current_model"
+      dropParams: ["stop", "temperature"] # Optional: prevents LibreChat from sending unsupported params

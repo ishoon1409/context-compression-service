@@ -1,109 +1,223 @@
 # Context Compression Service
 
-A high-performance backend middleware service designed to drastically reduce LLM context payloads while mathematically guaranteeing the retention of critical factual data. 
+A FastAPI middleware service that sits between [LibreChat](https://github.com/danny-avila/LibreChat) and your LLM provider, transparently compressing bloated context — long chat history, images, MCP tool output, and PDFs — before it ever reaches the model. Built on top of Groq's LPU inference for fast, cheap compression passes.
 
-As AI applications scale, unbounded chat histories and large document payloads bloat context windows, driving up inference costs and latency while degrading model reasoning. This service intercepts LLM payloads, runs them through an Entity-First distillation engine, and reconstructs the context state—regularly achieving >70% token compression with >85% factual retention.
+## Why
 
-## 🚀 Core Features
+LLM context windows are expensive and finite. A lot of what fills them is bloat: repetitive chat history, verbose JSON from tool calls, raw pixels, or entire documents when only a few facts are relevant. This service intercepts that traffic and compresses it — algorithmically where possible, with a cheap LLM pass where necessary — before forwarding it on, so your actual conversation budget is spent on signal, not noise.
 
-* **Unified Developer Dashboard:** A clean, zero-dependency frontend UI (Vanilla JS + Tailwind) hosted directly on the root endpoint for drag-and-drop document compression and real-time chat evaluation.
-* **Document Map-Reduce Pipeline (New):** Ingests massive technical PDFs, chunks them with intelligent overlap boundaries, and processes them concurrently via Groq LPUs to synthesize a highly dense, unified document summary.
-* **Entity-First Context Summarization:** Prevents "context amnesia" by forcing the compression model to extract and isolate hard variables (ARNs, specific numerical metrics, code paths) and outputting them in strict, human-readable Markdown.
-* **Dynamic Payload Partitioning:** Slices incoming chat requests based on token bounds. Protects the immediate conversational tail verbatim while rolling older historical context into a dense memory state.
-* **Automated Differential Evaluation (LLM-as-a-Judge):** A built-in testing suite that runs parallel inference paths (Uncompressed vs. Compressed) and mathematically grades the compression engine on strict factual retention (0-100 score).
+## Architecture
 
-## 📁 Architecture Overview
+```mermaid
+graph TD
+    A[LibreChat] -->|chat messages| B["/v1/chat/completions<br/>Rolling summary compression"]
+    A -->|image upload| C["/image/v1/chat/completions<br/>Semantic image captioning"]
+    A -->|MCP server URL| D["/mcp/v1/chat/completions<br/>Tool chaining + YAML compression"]
+    A -->|question| E["/rag/v1/chat/completions<br/>ChromaDB retrieval"]
+    F[Dashboard UI] -->|PDF upload| G["/compress/pdf<br/>Map-reduce summarization"]
+    F -->|PDF upload| H["/rag/ingest<br/>Embed into ChromaDB"]
 
-```text
-context-compression-service/
-├── app/
-│   ├── main.py                   # FastAPI routing, threshold logic, and UI rendering
-│   ├── core/
-│   │   ├── compressor.py         # Async rolling chat summary engine (Markdown-forced)
-│   │   ├── pdf_compressor.py     # Concurrent Map-Reduce chunking pipeline for documents
-│   │   ├── evaluator.py          # LLM-as-a-Judge logic for differential testing
-│   │   └── tokenizer.py          # ChatML-aware token calculation bounds
-│   └── test_history.json         # Highly technical, multi-turn evaluation datasets
-├── frontend/
-│   └── index.html                # Unified Dashboard (Tailwind CSS + JS integration)
-├── requirements.txt              # Project dependencies
-└── .env                          # Environment variables (API Keys)
+    B --> I[(Groq LPU)]
+    C --> J[(Qwen3-VL via Neysa)]
+    D --> I
+    E --> K[(ChromaDB)]
+    G --> I
+    H --> K
 ```
 
-## 🛠️ Installation & Setup
+Every endpoint speaks the OpenAI `/v1/chat/completions` shape on the outside — regardless of what it actually does internally — so LibreChat can talk to it as a normal custom model endpoint.
 
-1. Clone the repository:
+## Features
 
-Bash
-git clone [https://github.com/YOUR_USERNAME/context-compression-service.git](https://github.com/YOUR_USERNAME/context-compression-service.git)
+### 💬 Chat text compression
+Every request's total token count is checked against a configurable percentage (default 80%) of the model's context limit. When exceeded, older messages are folded into a rolling summary while the most recent messages are kept verbatim. The summary is cached per-conversation (via a fingerprint of the earliest messages) so each subsequent compression only summarizes *new* turns, rather than re-summarizing the whole history from scratch every time.
+
+### 🖼️ Image compression
+Uploaded images are resized through an adaptive retry ladder (256px → 192px → 128px) and sent to a vision model (Qwen3-VL) with a structured prompt, returning a dense bullet-point caption organized under **Subject / Setting / Actions / Notable details**. Token metrics compare the vision model's real per-image token cost (via its 32×32 patch tokenization formula) against the caption's token count.
+
+### 🔌 MCP tool JSON compression
+Paste a bare MCP server URL (optionally with a plain-English request) and the service will:
+- Discover available tools on the server
+- Auto-select a tool if only one exists, or use an LLM to pick the right one (and build matching arguments) if there's a request to disambiguate
+- Automatically chain multiple dependent tool calls when one tool's output feeds into another (e.g. resolve an ID, then query using it), with duplicate-call detection to avoid infinite loops
+- Compress the final raw JSON result into dense YAML via an LLM pass
+
+### 📄 PDF summarization (map-reduce)
+A PDF is converted to clean Markdown (via PyMuPDF), split into semantic chunks by header, each chunk is summarized independently (map phase), and all chunk summaries are synthesized into one cohesive executive summary (reduce phase) — with a differential evaluation pipeline available to score how much information was retained versus the original.
+
+### 🧠 RAG knowledge base
+PDFs are embedded into a local ChromaDB vector store via the dashboard. Chat questions in LibreChat retrieve the top matching chunks and answer from those directly, rather than loading the whole document into context.
+
+## Project structure
+
+```
+context-compression-service/
+├── app/
+│   ├── main.py                     # FastAPI app entrypoint, router registration
+│   ├── core/
+│   │   ├── tokenizer.py            # Token counting + chunking utilities
+│   │   ├── compressor.py           # Rolling chat summary generation
+│   │   ├── mcp_compressor.py       # JSON → YAML compression
+│   │   ├── mcp_client.py           # MCP protocol handshake + tool calls
+│   │   ├── image_compressor.py     # Vision model captioning
+│   │   ├── pdf_compressor.py       # Map-reduce PDF summarization
+│   │   └── rag_engine.py           # ChromaDB ingestion + retrieval
+│   ├── documents/
+│   │   ├── pdf_processor.py        # PDF text extraction
+│   │   └── nlp_processor.py        # Local extractive summarization
+│   └── routers/
+│       ├── openai_proxy.py         # Chat text compression endpoint
+│       ├── image_proxy.py          # Image compression endpoint
+│       ├── mcp_proxy.py            # MCP compression endpoint
+│       ├── rag_proxy.py            # RAG query endpoint
+│       └── pdf_proxy.py            # PDF REST upload endpoint
+├── frontend/
+│   └── index.html                  # Dashboard UI (served at /dashboard)
+├── .env                             # API keys (not committed)
+└── requirements.txt
+```
+
+## Setup
+
+### Prerequisites
+- Python 3.10+
+- A [Groq API key](https://console.groq.com) (free tier works)
+- An MCP-compatible endpoint if you want vision compression (this project uses [Neysa](https://neysa.io) hosting Qwen3-VL, but any OpenAI-compatible vision endpoint can be substituted)
+- [LibreChat](https://github.com/danny-avila/LibreChat) running via Docker, if you want the chat integration rather than just the REST API
+
+### Installation
+
+```bash
+git clone <your-repo-url>
 cd context-compression-service
-
-2. Create and activate a virtual environment:
-
-Windows:
-
-Bash
 python -m venv venv
-venv\Scripts\activate
-
-Mac/Linux:
-
-Bash
-python3 -m venv venv
-source venv/bin/activate
-
-3. Install dependencies:
-
-(Note: Uses fastapi, uvicorn, groq, python-multipart for PDF uploads, and tiktoken)
-
-Bash
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # macOS/Linux
 pip install -r requirements.txt
+```
 
-4. Configure Environment Variables:
+Create a `.env` file in the project root:
 
-Create a .env file in the root directory and add your Groq API key:
+```env
+GROQ_API_KEY=your_groq_api_key_here
+NEYSA_API_KEY=your_neysa_api_key_here
+```
 
-Code snippet
-GROQ_API_KEY=your_api_key_here
+Run the service:
 
-## 💻 Usage & Dashboard Access
+```bash
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-1. Start the Server:
+> **Note:** if your project folder lives inside a cloud-synced directory (OneDrive, Dropbox, iCloud), background sync activity can trigger spurious file-change detection and interrupt in-flight requests when using `--reload`. Move the project to a local-only path, or drop `--reload` and restart manually after edits, if you notice random mid-request interruptions.
 
-Start the FastAPI service using Uvicorn. This will boot both the backend API and the frontend UI.
+Open the dashboard at **http://localhost:8000/dashboard** to test any engine directly without LibreChat.
 
-Bash
-uvicorn app.main:app --reload
+### LibreChat integration
 
-2. Access the Unified Dashboard:
+Add the following to your `librechat.yaml`:
 
-Open your browser and navigate to http://127.0.0.1:8000.
-From the dashboard, you can:
+```yaml
+version: 1.1.0
+cache: true
 
-📄 Document (PDF) Compressor: Drag and drop technical PDFs to generate heavily compressed, entity-dense Markdown summaries.
+endpoints:
+  custom:
+    - name: "Context Compression Engine"
+      apiKey: "sk-fake-key-not-needed"
+      baseURL: "http://host.docker.internal:8000/v1"
+      models:
+        default: ["llama-3.1-8b-instant"]
+        fetch: false
+      titleConvo: true
+      titleModel: "current_model"
+      dropParams: ["stop", "temperature"]
 
-💬 Chat History Compressor: Paste raw conversational logs, input a follow-up question, and watch the AI Judge grade the uncompressed vs. compressed answers in real-time.
+    - name: "RAG Knowledge Base"
+      apiKey: "sk-fake-key-not-needed"
+      baseURL: "http://host.docker.internal:8000/rag/v1"
+      models:
+        default: ["rag-engine"]
+        fetch: false
+      titleConvo: true
+      titleModel: "current_model"
+      dropParams: ["stop", "temperature"]
 
-3. API Documentation:
+    - name: "Image Compression Engine"
+      apiKey: "sk-fake-key-not-needed"
+      baseURL: "http://host.docker.internal:8000/image/v1"
+      models:
+        default: ["image-compressor"]
+        fetch: false
+      titleConvo: true
+      titleModel: "current_model"
+      dropParams: ["stop", "temperature"]
 
-You can access the interactive Swagger API documentation at http://127.0.0.1:8000/docs.
+    - name: "MCP JSON Compression Engine"
+      apiKey: "sk-fake-key-not-needed"
+      baseURL: "http://host.docker.internal:8000/mcp/v1"
+      models:
+        default: ["mcp-compressor"]
+        fetch: false
+      titleConvo: false
+      dropParams: ["stop", "temperature"]
 
-## 🧪 Differential Evaluation Methodology
+fileConfig:
+  clientImageResize:
+    enabled: true
+    maxWidth: 4000
+    maxHeight: 4000
+    quality: 0.92
 
-The built-in evaluation endpoint (/evaluate/chat) operates on a strict logic flow to visually verify data integrity on the frontend:
+  endpoints:
+    "Image Compression Engine":
+      fileLimit: 1
+      fileSizeLimit: 20
+      supportedMimeTypes:
+        - "image/.*"
+  serverFileSizeLimit: 20
+```
 
-Path A (Gold Standard): Sends the full, uncompressed multi-turn chat history to the LLM and records the baseline answer.
+Restart LibreChat's backend service (`docker compose restart api`) after any `librechat.yaml` change.
 
-Path B (Compressed State): Sends only the distilled Markdown summary + the immediate verbatim tail to the LLM and records the challenger answer.
+## Usage
 
-The AI Judge: A secondary strict-math LLM process evaluates Answer B against Answer A. Using Chain-of-Thought prompting, it deducts specific point values for any dropped ARNs, numerical metrics, or file names, outputting a highly accurate retention score.
+| Task | How |
+|---|---|
+| Compress a long chat conversation | Just chat normally on the **Context Compression Engine** model — compression triggers automatically at 80% of context |
+| Compress an image | Switch to **Image Compression Engine**, attach an image, send |
+| Compress MCP tool output | Switch to **MCP JSON Compression Engine**, paste a server URL + what you want (e.g. `https://your-mcp-server.com get open issues for project ENG`) |
+| Summarize a PDF | Use the dashboard's **Document (PDF) Compressor** tab |
+| Ask questions about a PDF | Ingest it via the dashboard's **RAG Knowledge Base** tab, then ask questions on the **RAG Knowledge Base** model in LibreChat |
 
-## 📊 Performance Benchmarks (v2.0)
+## API reference
 
-Evaluated against strict multi-turn technical extraction suites and large PDF manuals using the Groq Llama 3.1 8B inference engine.
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/v1/chat/completions` | POST | Chat compression (LibreChat-facing) |
+| `/image/v1/chat/completions` | POST | Image compression (LibreChat-facing) |
+| `/mcp/v1/chat/completions` | POST | MCP compression (LibreChat-facing) |
+| `/rag/v1/chat/completions` | POST | RAG query (LibreChat-facing) |
+| `/compress/chat` | POST | Direct chat compression API |
+| `/compress/image` | POST | Direct image compression API |
+| `/compress/mcp` | POST | Compress a pasted JSON blob |
+| `/compress/mcp-external` | POST | Fetch + compress from a live MCP server |
+| `/compress/pdf` | POST | Map-reduce PDF summarization |
+| `/compress/pdf/local` | POST | Local (non-LLM) extractive PDF summarization |
+| `/rag/ingest` | POST | Embed a PDF into ChromaDB |
+| `/rag/query` | POST | Query the RAG knowledge base |
+| `/evaluate/chat` | POST | Differential quality evaluation (chat) |
+| `/evaluate/pdf` | POST | Differential quality evaluation (PDF) |
+| `/ws/benchmark` | WebSocket | Streamed CI/CD benchmark run |
+| `/dashboard` | GET | Web UI for direct testing |
 
-Average Context Compression Ratio: 70% - 97% (depending on PDF formatting and text density).
+## Known limitations
 
-Entity Retention Score: >85% (measured via strict deductive AI grading).
+- **Session continuity for chat compression** relies on fingerprinting the earliest messages in a conversation, since LibreChat doesn't send a stable conversation ID to custom endpoints. Editing or regenerating early messages can invalidate the cache and trigger a full re-summarization.
+- **MCP tool chaining** is capped at a fixed number of steps and relies on an LLM correctly reading JSON schemas to construct arguments — works reliably for simple flat schemas, less so for deeply nested ones.
+- **Image token metrics** reflect the image as received by this service, which may already be downscaled by LibreChat's own upload pipeline before reaching it — not necessarily the user's original file resolution.
+- **PDF chat integration**: the map-reduce summarizer (`/compress/pdf`) is only reachable via direct API/dashboard use, not through LibreChat's chat interface. For in-chat PDF Q&A, use the RAG ingestion + query flow instead.
 
-Latency: Near-instantaneous Map-Reduce execution via Groq's high-speed LPU infrastructure.
+## License
+
+MIT

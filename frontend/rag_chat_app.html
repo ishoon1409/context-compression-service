@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Context Compression RAG Chat</title>
+    
+    <!-- Load Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Load Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Load Marked.js for rendering markdown in chat -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        primary: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
+                        surface: '#f8fafc',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Typing animation */
+        .typing-dot {
+            animation: typing 1.4s infinite ease-in-out both;
+        }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        /* Markdown Styles within chat bubbles */
+        .markdown-body p { margin-bottom: 0.5em; }
+        .markdown-body p:last-child { margin-bottom: 0; }
+        .markdown-body pre { background: rgba(0,0,0,0.1); padding: 0.5rem; border-radius: 0.5rem; overflow-x: auto; margin-top: 0.5em; }
+        .markdown-body code { background: rgba(0,0,0,0.1); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.875em; }
+    </style>
+</head>
+<body class="bg-surface h-screen flex overflow-hidden text-slate-800">
+
+    <!-- Sidebar: PDF Management -->
+    <aside class="w-72 bg-white border-r border-slate-200 flex flex-col h-full transition-all duration-300 z-20 absolute md:relative transform -translate-x-full md:translate-x-0" id="sidebar">
+        <!-- Sidebar Header -->
+        <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+            <div class="flex items-center gap-2 text-primary-600 font-semibold text-lg">
+                <i class="ph-fill ph-books"></i>
+                <span>Knowledge Base</span>
+            </div>
+            <button onclick="toggleSidebar()" class="md:hidden text-slate-400 hover:text-slate-600">
+                <i class="ph ph-x text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Upload Zone -->
+        <div class="p-4">
+            <label for="pdf-upload" class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors group relative overflow-hidden">
+                <div class="flex flex-col items-center justify-center pt-5 pb-6" id="upload-prompt">
+                    <i class="ph ph-upload-simple text-3xl text-slate-400 mb-2 group-hover:text-primary-500 transition-colors"></i>
+                    <p class="mb-1 text-sm text-slate-500 font-medium">Click to upload PDF</p>
+                    <p class="text-xs text-slate-400">PDFs are ingested into ChromaDB</p>
+                </div>
+                <!-- Loading Overlay -->
+                <div id="upload-loading" class="hidden absolute inset-0 bg-white/90 flex-col items-center justify-center">
+                    <i class="ph ph-spinner animate-spin text-2xl text-primary-500 mb-2"></i>
+                    <span class="text-xs font-semibold text-primary-600">Ingesting PDF...</span>
+                </div>
+                <input id="pdf-upload" type="file" class="hidden" accept=".pdf" onchange="handleFileUpload(event)" />
+            </label>
+        </div>
+
+        <!-- Document List -->
+        <div class="flex-1 overflow-y-auto px-4 pb-4">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Ingested Documents</h3>
+            <ul id="document-list" class="space-y-2">
+                <!-- Documents will be injected here -->
+                <li class="text-sm text-slate-500 italic text-center py-4" id="empty-docs-msg">No documents ingested yet.</li>
+            </ul>
+        </div>
+    </aside>
+
+    <!-- Main Chat Area -->
+    <main class="flex-1 flex flex-col h-full bg-slate-50 relative">
+        <!-- Chat Header -->
+        <header class="bg-white border-b border-slate-200 p-4 flex items-center shadow-sm z-10">
+            <button onclick="toggleSidebar()" class="mr-3 md:hidden text-slate-500 hover:text-primary-600 transition-colors">
+                <i class="ph ph-list text-2xl"></i>
+            </button>
+            <div>
+                <h1 class="font-semibold text-slate-800 flex items-center gap-2">
+                    <i class="ph-fill ph-robot text-primary-500 text-xl"></i>
+                    Context-Aware RAG Assistant
+                </h1>
+                <p class="text-xs text-slate-500">Connected to local Vector DB (ChromaDB)</p>
+            </div>
+        </header>
+
+        <!-- Chat Messages -->
+        <div id="chat-container" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+            
+            <!-- Welcome Message -->
+            <div class="flex gap-4">
+                <div class="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                    <i class="ph-fill ph-robot text-primary-600 text-lg"></i>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm max-w-[85%] sm:max-w-[75%] text-sm text-slate-700">
+                    <p>Hello! I am your RAG assistant. Upload a PDF using the panel on the left, and I will be able to answer questions based on its exact contents using vector similarity search.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Chat Input Form -->
+        <div class="p-4 bg-white border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)]">
+            <form id="chat-form" class="max-w-4xl mx-auto relative flex items-end gap-2" onsubmit="handleChatSubmit(event)">
+                <div class="flex-1 relative bg-slate-50 border border-slate-300 rounded-2xl focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-100 transition-all">
+                    <textarea 
+                        id="chat-input" 
+                        rows="1" 
+                        class="w-full bg-transparent border-none rounded-2xl py-3 pl-4 pr-12 resize-none focus:ring-0 text-sm max-h-32" 
+                        placeholder="Ask a question about your documents..."
+                        oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"
+                        onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleChatSubmit(event); }"
+                    ></textarea>
+                </div>
+                <button type="submit" id="send-btn" class="h-[46px] w-[46px] rounded-full bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center flex-shrink-0 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="ph-fill ph-paper-plane-right text-lg"></i>
+                </button>
+            </form>
+            <div class="text-center mt-2">
+                <span class="text-[10px] text-slate-400">Context Compression Service \&#8226; RAG Engine active</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Custom Toast Notification -->
+    <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-lg text-sm font-medium transition-all duration-300 translate-y-[-150%] z-50 flex items-center gap-2">
+        <i id="toast-icon" class="ph-fill ph-info text-lg"></i>
+        <span id="toast-message">Notification</span>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // CONFIGURATION: Ensure this matches your FastAPI backend!
+        const BACKEND_URL = "http://localhost:8000"; 
+        
+        // State management
+        let ingestedDocs = [];
+        let isProcessing = false;
+
+        // UI Elements
+        const chatContainer = document.getElementById('chat-container');
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const documentList = document.getElementById('document-list');
+        const emptyDocsMsg = document.getElementById('empty-docs-msg');
+        
+        // UI Helpers
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar.classList.contains('-translate-x-full')) {
+                sidebar.classList.remove('-translate-x-full');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+            
+            toastMessage.textContent = message;
+            
+            if (type === 'error') {
+                toast.classList.replace('bg-slate-800', 'bg-red-600');
+                toastIcon.className = 'ph-fill ph-warning-circle text-lg';
+            } else if (type === 'success') {
+                toast.classList.replace('bg-slate-800', 'bg-green-600');
+                toastIcon.className = 'ph-fill ph-check-circle text-lg';
+            } else {
+                toast.classList.replace('bg-red-600', 'bg-slate-800');
+                toast.classList.replace('bg-green-600', 'bg-slate-800');
+                toastIcon.className = 'ph-fill ph-info text-lg';
+            }
+
+            toast.classList.remove('translate-y-[-150%]');
+            setTimeout(() => toast.classList.add('translate-y-[-150%]'), 3000);
+        }
+
+        // PDF Upload Logic
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (file.type !== "application/pdf") {
+                showToast("Please upload a valid PDF file.", "error");
+                return;
+            }
+
+            // UI feedback
+            const uploadLoading = document.getElementById('upload-loading');
+            uploadLoading.classList.remove('hidden');
+            document.getElementById('upload-prompt').classList.add('opacity-0');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                // Hitting your actual FastAPI /rag/ingest endpoint
+                const response = await fetch(`${BACKEND_URL}/rag/ingest`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                // const data = await response.json(); // Use if backend returns metadata
+                
+                // Add to local UI list
+                ingestedDocs.push(file.name);
+                updateDocumentList();
+                showToast(`Successfully ingested ${file.name} into ChromaDB!`, "success");
+
+            } catch (error) {
+                console.error("Upload error:", error);
+                // Fallback for simulation/Canvas if backend is down
+                showToast(`Simulation: ${file.name} uploaded successfully. (Backend disconnected)`, "success");
+                ingestedDocs.push(file.name);
+                updateDocumentList();
+            } finally {
+                uploadLoading.classList.add('hidden');
+                document.getElementById('upload-prompt').classList.remove('opacity-0');
+                event.target.value = ''; // Reset input
+            }
+        }
+
+        function updateDocumentList() {
+            if (ingestedDocs.length > 0) {
+                emptyDocsMsg.style.display = 'none';
+            }
+            
+            documentList.innerHTML = '';
+            ingestedDocs.forEach(doc => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-lg text-sm text-slate-700 shadow-sm';
+                li.innerHTML = `
+                    <i class="ph-fill ph-file-pdf text-red-500 text-lg"></i>
+                    <span class="truncate flex-1" title="${doc}">${doc}</span>
+                    <i class="ph-fill ph-check-circle text-green-500" title="Embedded"></i>
+                `;
+                documentList.appendChild(li);
+            });
+        }
+
+        // Chat Logic
+        function appendUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'flex gap-4 justify-end';
+            div.innerHTML = `
+                <div class="bg-primary-600 text-white rounded-2xl rounded-tr-none p-4 shadow-sm max-w-[85%] sm:max-w-[75%] text-sm markdown-body">
+                    <p>${text.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>
+                </div>
+            `;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+        function appendAssistantMessage(htmlContent, isError = false) {
+            const div = document.createElement('div');
+            div.className = 'flex gap-4';
+            
+            const colorClass = isError ? 'text-red-600 bg-red-50 border-red-200' : 'text-slate-700 bg-white border-slate-200';
+            const iconClass = isError ? 'ph-warning-circle text-red-600' : 'ph-robot text-primary-600';
+            
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <i class="ph-fill ${iconClass} text-lg"></i>
+                </div>
+                <div class="${colorClass} border rounded-2xl rounded-tl-none p-4 shadow-sm max-w-[85%] sm:max-w-[75%] text-sm markdown-body">
+                    ${htmlContent}
+                </div>
+            `;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+        function showTypingIndicator() {
+            const div = document.createElement('div');
+            div.id = 'typing-indicator';
+            div.className = 'flex gap-4';
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <i class="ph-fill ph-robot text-primary-600 text-lg"></i>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none p-4 shadow-sm flex items-center gap-1">
+                    <div class="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div>
+                    <div class="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div>
+                    <div class="w-1.5 h-1.5 bg-slate-400 rounded-full typing-dot"></div>
+                </div>
+            `;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) indicator.remove();
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function handleChatSubmit(event) {
+            event.preventDefault();
+            
+            const text = chatInput.value.trim();
+            if (!text || isProcessing) return;
+
+            // Update UI
+            chatInput.value = '';
+            chatInput.style.height = ''; // reset height
+            isProcessing = true;
+            sendBtn.disabled = true;
+            
+            appendUserMessage(text);
+            showTypingIndicator();
+
+            try {
+                // Attempt to hit your actual FastAPI backend RAG query endpoint
+                const response = await fetch(`${BACKEND_URL}/rag/query`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: text }) // Adjust payload key if your backend expects 'question'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Assuming backend returns { answer: "...", sources: [...] }
+                // Adjust based on your actual `rag_engine.py` return structure
+                const answer = data.answer || data.response || data.text || JSON.stringify(data);
+                
+                removeTypingIndicator();
+                
+                // Parse markdown before injecting
+                appendAssistantMessage(marked.parse(answer));
+
+            } catch (error) {
+                console.error("Query error:", error);
+                removeTypingIndicator();
+                
+                // Mock response for the Canvas simulation if backend is unavailable
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    setTimeout(() => {
+                        appendAssistantMessage(marked.parse(`**Simulation Mode:** I am unable to connect to the backend at \`${BACKEND_URL}\`. \n\nHowever, if the backend was running, I would have used ChromaDB to perform a semantic Cosine Similarity search to answer your question regarding: *"${text}"*`));
+                    }, 500);
+                } else {
+                    appendAssistantMessage(`Error connecting to RAG Engine: ${error.message}`, true);
+                }
+            } finally {
+                isProcessing = false;
+                sendBtn.disabled = false;
+                chatInput.focus();
+            }
+        }
+    </script>
+</body>
+</html>

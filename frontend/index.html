@@ -21,12 +21,24 @@
 
     <main class="flex-1 max-w-5xl w-full mx-auto p-6 md:p-8 space-y-8">
         
-        <div class="flex border-b border-gray-200 space-x-8">
-            <button id="tab-pdf" onclick="switchTab('pdf')" class="py-3 px-1 border-b-2 border-black font-semibold text-sm transition-all text-black">
+        <div class="flex border-b border-gray-200 space-x-8 overflow-x-auto">
+            <button id="tab-pdf" onclick="switchTab('pdf')" class="py-3 px-1 border-b-2 border-black font-semibold text-sm transition-all text-black whitespace-nowrap">
                 📄 Document (PDF) Compressor
             </button>
-            <button id="tab-chat" onclick="switchTab('chat')" class="py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-900 transition-all">
+            <button id="tab-chat" onclick="switchTab('chat')" class="py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-900 transition-all whitespace-nowrap">
                 💬 Chat History Compressor
+            </button>
+            <button id="tab-mcp" onclick="switchTab('mcp')" class="py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-900 transition-all whitespace-nowrap">
+                🔌 API / MCP Compressor
+            </button>
+            <button id="tab-image" onclick="switchTab('image')" class="py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-900 transition-all whitespace-nowrap">
+                🖼️ Image Compressor
+            </button>
+            <button id="tab-rag" onclick="switchTab('rag')" class="py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-900 transition-all whitespace-nowrap">
+                🧠 RAG Knowledge Base
+            </button>
+            <button id="tab-bench" onclick="switchTab('bench')" class="py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-900 transition-all whitespace-nowrap">
+                ⚙️ CI/CD Benchmarks
             </button>
         </div>
 
@@ -35,12 +47,41 @@
             <div class="bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-6">
                 
                 <div id="view-pdf" class="space-y-4">
-                    <label class="block text-sm font-semibold text-gray-800">Upload Technical Document</label>
-                    <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-black transition-colors cursor-pointer bg-gray-50 group" onclick="document.getElementById('pdf-file').click()">
+                    <label class="block text-sm font-semibold text-gray-800">Upload technical document</label>
+
+                    <div id="pdf-dropzone"
+                        class="relative border-2 border-dashed border-gray-300 rounded-xl p-10 text-center cursor-pointer bg-gray-50 transition-all duration-150"
+                        onclick="document.getElementById('pdf-file').click()"
+                        ondragover="handleDragOver(event, 'pdf-dropzone')"
+                        ondragleave="handleDragLeave(event, 'pdf-dropzone')"
+                        ondrop="handleDrop(event, 'pdf-dropzone', 'pdf', handleFileSelect)">
+
                         <input type="file" id="pdf-file" accept=".pdf" class="hidden" onchange="handleFileSelect(event)">
-                        <span class="block text-3xl mb-2 group-hover:scale-110 transition-transform">📤</span>
-                        <span id="file-label" class="block text-sm font-medium text-gray-600">Drag and drop your PDF here, or <span class="text-black underline font-semibold">browse</span></span>
-                        <span class="block text-xs text-gray-400 mt-1">Supports multi-page technical layouts up to 50k tokens</span>
+
+                        <div id="pdf-prompt-state" class="space-y-3">
+                            <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                            <p id="file-label" class="text-sm font-medium text-gray-600">
+                                Drag and drop your PDF here, or <span class="text-black underline font-semibold">browse</span>
+                            </p>
+                            <p class="text-xs text-gray-400">Supports multi-page technical layouts up to 50k tokens</p>
+                        </div>
+
+                        <div id="pdf-selected-state" class="hidden items-center justify-between gap-3 text-left bg-white rounded-lg border border-gray-200 p-3">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <span class="shrink-0 h-9 w-9 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xs font-bold">PDF</span>
+                                <div class="min-w-0">
+                                    <p id="pdf-file-name" class="text-sm font-medium text-gray-800 truncate"></p>
+                                    <p id="pdf-file-size" class="text-xs text-gray-400"></p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="clearSelectedFile(event, 'pdf')" class="shrink-0 h-7 w-7 rounded-full flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-100 transition-colors" aria-label="Remove file">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -50,6 +91,113 @@
                     
                     <label for="new-question" class="block text-sm font-semibold text-gray-800 mt-4">Follow-up Evaluation Question</label>
                     <input type="text" id="new-question" class="w-full rounded-xl border border-gray-300 p-4 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none" placeholder="e.g., 'What was the specific refractive index we changed?'">
+                </div>
+
+                <div id="view-mcp" class="hidden space-y-4">
+                    <div class="bg-blue-50 border border-blue-200 p-6 rounded-xl shadow-sm">
+                        <h4 class="text-sm font-bold text-blue-900 mb-1">📡 Connect to External MCP Server</h4>
+                        <p class="text-xs text-blue-700 mb-4">Fetch bloated JSON directly from an active MCP tool and instantly compress it.</p>
+                        <div class="flex space-x-4">
+                            <input type="text" id="mcp-server-url" class="flex-1 rounded-xl border border-blue-300 p-3 text-sm focus:ring-1 focus:ring-blue-600 outline-none" placeholder="Server URL (e.g., http://localhost:8080)">
+                            <input type="text" id="mcp-server-tool" class="w-1/3 rounded-xl border border-blue-300 p-3 text-sm focus:ring-1 focus:ring-blue-600 outline-none" placeholder="Tool Name (e.g., get_jira_ticket)">
+                            <button onclick="fetchExternalMCP()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl text-sm font-bold shadow transition-all whitespace-nowrap">Fetch & Compress</button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center my-6">
+                        <div class="flex-grow border-t border-gray-200"></div>
+                        <span class="px-4 text-xs text-gray-400 font-bold uppercase tracking-widest">OR PASTE RAW JSON</span>
+                        <div class="flex-grow border-t border-gray-200"></div>
+                    </div>
+
+                    <label for="mcp-payload" class="block text-sm font-semibold text-gray-800">Raw API / MCP JSON Payload</label>
+                    <textarea id="mcp-payload" rows="8" class="w-full rounded-xl border border-gray-300 p-4 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none placeholder-gray-400 font-mono" placeholder='{"status": "success", "data": [{"id": 123, "verbose_field": "..."}]}'></textarea>
+                    
+                    <label for="mcp-tool-name" class="block text-sm font-semibold text-gray-800 mt-4">Tool/Service Name (Optional)</label>
+                    <input type="text" id="mcp-tool-name" class="w-full rounded-xl border border-gray-300 p-4 text-sm focus:ring-1 focus:ring-black focus:border-black outline-none" placeholder="e.g., 'jira', 'github', 'slack'">
+                </div>
+
+                <div id="view-image" class="hidden space-y-4">
+                    <label class="block text-sm font-semibold text-gray-800">Upload image for semantic compression</label>
+                    <p class="text-xs text-gray-500 mb-2">Convert visual data (screenshots, diagrams, charts) into highly dense semantic text for LLM contexts.</p>
+
+                    <div id="image-dropzone"
+                        class="relative border-2 border-dashed border-gray-300 rounded-xl p-10 text-center cursor-pointer bg-gray-50 transition-all duration-150"
+                        onclick="document.getElementById('image-file').click()"
+                        ondragover="handleDragOver(event, 'image-dropzone')"
+                        ondragleave="handleDragLeave(event, 'image-dropzone')"
+                        ondrop="handleDrop(event, 'image-dropzone', 'image', handleImageSelect)">
+
+                        <input type="file" id="image-file" accept="image/*" class="hidden" onchange="handleImageSelect(event)">
+
+                        <div id="image-prompt-state" class="space-y-3">
+                            <svg class="mx-auto h-10 w-10 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3h18a1.5 1.5 0 011.5 1.5v15a1.5 1.5 0 01-1.5 1.5H3A1.5 1.5 0 011.5 19.5v-15A1.5 1.5 0 013 3z" />
+                            </svg>
+                            <p id="image-file-label" class="text-sm font-medium text-gray-600">
+                                Drag and drop your image here, or <span class="text-black underline font-semibold">browse</span>
+                            </p>
+                            <p class="text-xs text-gray-400">Supports PNG, JPEG, WebP</p>
+                        </div>
+
+                        <div id="image-selected-state" class="hidden items-center justify-between gap-3 text-left bg-white rounded-lg border border-gray-200 p-3">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <span class="shrink-0 h-9 w-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">IMG</span>
+                                <div class="min-w-0">
+                                    <p id="image-file-name" class="text-sm font-medium text-gray-800 truncate"></p>
+                                    <p id="image-file-size" class="text-xs text-gray-400"></p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="clearSelectedFile(event, 'image')" class="shrink-0 h-7 w-7 rounded-full flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-100 transition-colors" aria-label="Remove image">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-bench" class="hidden space-y-4">
+                    <div class="flex justify-between items-center">
+                        <label class="block text-sm font-semibold text-gray-800">Automated Differential Evaluation Pipeline</label>
+                        <button id="btn-run-bench" onclick="startBenchmark()" class="bg-black hover:bg-gray-900 text-white text-xs font-bold py-2 px-4 rounded shadow">Run Full Test Suite</button>
+                    </div>
+                    <p class="text-xs text-gray-500">This will execute the batch JSON dataset against the LLM Judge. Progress will stream below via WebSockets.</p>
+                    
+                    <div id="terminal-output" class="w-full h-96 bg-gray-950 rounded-xl border border-gray-800 p-4 overflow-y-auto font-mono text-xs text-green-400 whitespace-pre-wrap leading-relaxed shadow-inner">Waiting to establish WebSocket connection...</div>
+                </div>
+
+                <div id="view-rag" class="hidden space-y-6">
+                    <div class="space-y-4">
+                        <label class="block text-sm font-semibold text-gray-800">1. Upload to Vector DB</label>
+                        <p class="text-xs text-gray-500">Embed a PDF into your local ChromaDB. You can upload multiple files to build a wider knowledge base.</p>
+                        <div class="flex items-center space-x-4">
+                            <input type="file" id="rag-file-upload" accept="application/pdf" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 cursor-pointer transition-colors border border-gray-200">
+                            <button onclick="ingestRAG()" class="bg-black hover:bg-gray-900 text-white px-6 py-2 rounded-xl text-sm font-bold shadow transition-all whitespace-nowrap">Embed PDF</button>
+                        </div>
+                        <div id="rag-ingest-status" class="mt-2 text-xs font-medium hidden text-green-600 bg-green-50 p-2 rounded-lg border border-green-200"></div>
+                    </div>
+                    
+                    <hr class="border-gray-200">
+
+                    <div class="space-y-4">
+                        <label class="block text-sm font-semibold text-gray-800">2. Search Knowledge Base</label>
+                        <p class="text-xs text-gray-500">Ask a question. The engine will retrieve the top 3 semantic chunks across all embedded files.</p>
+                        <div class="flex space-x-4">
+                            <input type="text" id="rag-query-input" class="flex-1 rounded-xl border border-gray-300 p-3 text-sm focus:ring-1 focus:ring-black outline-none" placeholder="e.g., 'What were the core architectural changes mentioned?'">
+                            <button onclick="queryRAG()" class="bg-black hover:bg-gray-900 text-white px-6 py-2 rounded-xl text-sm font-bold shadow transition-all whitespace-nowrap">Semantic Search</button>
+                        </div>
+                    </div>
+
+                    <div id="rag-results-container" class="hidden mt-6 bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-4">
+                        <h4 class="text-sm font-bold text-gray-800">Generated Answer:</h4>
+                        <p id="rag-answer" class="text-sm text-gray-700 leading-relaxed whitespace-pre-line"></p>
+                        
+                        <div class="pt-4 border-t border-gray-200">
+                            <h4 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Sources Used by Groq:</h4>
+                            <pre id="rag-sources" class="text-xs text-blue-600 bg-blue-50 p-3 rounded-lg border border-blue-100 overflow-x-auto"></pre>
+                        </div>
+                    </div>
                 </div>
 
                 <details class="group border-t border-gray-100 pt-4">
@@ -69,14 +217,14 @@
                     </div>
                 </details>
 
-                <button onclick="processCompression()" class="w-full bg-black hover:bg-gray-900 text-white font-medium py-3 px-4 rounded-xl text-sm transition-all shadow-sm flex justify-center items-center space-x-2">
+                <button id="main-execute-btn" onclick="processCompression()" class="w-full bg-black hover:bg-gray-900 text-white font-medium py-3 px-4 rounded-xl text-sm transition-all shadow-sm flex justify-center items-center space-x-2">
                     <span>Execute Compression Pipeline</span>
                 </button>
             </div>
 
             <div id="loading" class="hidden text-center py-8 space-y-3">
                 <div class="inline-block animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-black"></div>
-                <p class="text-xs font-medium text-gray-500">Executing dual-track extraction map-reduce over Groq LPU...</p>
+                <p class="text-xs font-medium text-gray-500">Processing via Groq LPU...</p>
             </div>
 
             <div id="results-panel" class="hidden bg-white rounded-xl border border-gray-200 p-6 shadow-sm space-y-6">
@@ -97,12 +245,48 @@
                     </div>
                 </div>
 
-                <div id="pdf-output-container" class="space-y-2">
+                <div id="pdf-output-container" class="hidden space-y-2">
                     <div class="flex justify-between items-center">
                         <label class="block text-sm font-semibold text-gray-800">Synthesized Context State</label>
                         <button onclick="copyToClipboard()" class="text-xs text-gray-500 hover:text-black underline font-medium">Copy Summary</button>
                     </div>
                     <div id="output-text" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-4 text-sm font-normal text-gray-800 whitespace-pre-line leading-relaxed max-h-96 overflow-y-auto"></div>
+                    
+                    <div class="mt-6 border-t border-gray-200 pt-6 space-y-3">
+                        <label class="block text-sm font-semibold text-gray-800">Verify Compression Accuracy</label>
+                        <p class="text-xs text-gray-500">Ask a factual question. The AI Judge will compare the answer generated from the full PDF against the answer generated from this summary.</p>
+                        <div class="flex space-x-4">
+                            <input type="text" id="pdf-eval-question" class="flex-1 rounded-xl border border-gray-300 p-3 text-sm focus:ring-1 focus:ring-black outline-none" placeholder="e.g., 'What was the specific configuration mentioned?'">
+                            <button onclick="evaluatePDF()" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold py-3 px-6 rounded-xl shadow transition-all whitespace-nowrap">Run Evaluation</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="mcp-output-container" class="hidden space-y-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-sm font-semibold text-gray-800">Side-by-Side Compression Comparison</label>
+                        <button onclick="copyToClipboardMCP()" class="text-xs text-gray-500 hover:text-black underline font-medium">Copy YAML</button>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-gray-400 uppercase tracking-widest">Original Bloated JSON</label>
+                            <textarea id="mcp-raw-output" class="w-full rounded-xl bg-red-50 border border-red-100 p-4 text-xs font-mono text-gray-500 whitespace-pre-wrap leading-relaxed h-96 overflow-y-auto focus:outline-none" readonly></textarea>
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <label class="block text-xs font-bold text-green-500 uppercase tracking-widest">Compressed YAML State</label>
+                            <div id="mcp-output-text" class="w-full rounded-xl bg-gray-900 border border-gray-800 p-4 text-xs font-mono text-green-400 whitespace-pre-wrap leading-relaxed h-96 overflow-y-auto"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="image-output-container" class="hidden space-y-2">
+                    <div class="flex justify-between items-center">
+                        <label class="block text-sm font-semibold text-gray-800">Semantic Image Caption (Compressed State)</label>
+                        <button onclick="copyToClipboardImage()" class="text-xs text-gray-500 hover:text-black underline font-medium">Copy Text</button>
+                    </div>
+                    <div id="image-output-text" class="w-full rounded-xl bg-gray-50 border border-gray-200 p-4 text-sm font-normal text-gray-800 whitespace-pre-line leading-relaxed max-h-96 overflow-y-auto"></div>
                 </div>
 
                 <div id="chat-eval-container" class="hidden space-y-6">
@@ -135,34 +319,178 @@
     <script>
         let currentTab = 'pdf';
         let selectedFile = null;
+        let selectedImageFile = null;
         const BACKEND_URL = 'http://127.0.0.1:8000';
 
         function switchTab(tab) {
             currentTab = tab;
             const btnPdf = document.getElementById('tab-pdf');
             const btnChat = document.getElementById('tab-chat');
-            const viewPdf = document.getElementById('view-pdf');
-            const viewChat = document.getElementById('view-chat');
+            const btnMcp = document.getElementById('tab-mcp');
+            const btnImage = document.getElementById('tab-image');
+            const btnRag = document.getElementById('tab-rag');
+            const btnBench = document.getElementById('tab-bench');
+            
+            document.getElementById('view-pdf').classList.add('hidden');
+            document.getElementById('view-chat').classList.add('hidden');
+            document.getElementById('view-mcp').classList.add('hidden');
+            document.getElementById('view-image').classList.add('hidden');
+            document.getElementById('view-rag').classList.add('hidden');
+            document.getElementById('view-bench').classList.add('hidden');
+            document.getElementById('results-panel').classList.add('hidden');
+            
+            const inactiveClass = "py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-900 transition-all whitespace-nowrap";
+            const activeClass = "py-3 px-1 border-b-2 border-black font-semibold text-sm transition-all text-black whitespace-nowrap";
+
+            btnPdf.className = btnChat.className = btnMcp.className = btnImage.className = btnRag.className = btnBench.className = inactiveClass;
 
             if (tab === 'pdf') {
-                btnPdf.className = "py-3 px-1 border-b-2 border-black font-semibold text-sm transition-all text-black";
-                btnChat.className = "py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-900 transition-all";
-                viewPdf.classList.remove('hidden');
-                viewChat.classList.add('hidden');
+                btnPdf.className = activeClass;
+                document.getElementById('view-pdf').classList.remove('hidden');
+            } else if (tab === 'chat') {
+                btnChat.className = activeClass;
+                document.getElementById('view-chat').classList.remove('hidden');
+            } else if (tab === 'mcp') {
+                btnMcp.className = activeClass;
+                document.getElementById('view-mcp').classList.remove('hidden');
+            } else if (tab === 'image') {
+                btnImage.className = activeClass;
+                document.getElementById('view-image').classList.remove('hidden');
+            } else if (tab === 'rag') {
+                btnRag.className = activeClass;
+                document.getElementById('view-rag').classList.remove('hidden');
             } else {
-                btnChat.className = "py-3 px-1 border-b-2 border-black font-semibold text-sm transition-all text-black";
-                btnPdf.className = "py-3 px-1 border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-900 transition-all";
-                viewChat.classList.remove('hidden');
-                viewPdf.classList.add('hidden');
+                btnBench.className = activeClass;
+                document.getElementById('view-bench').classList.remove('hidden');
             }
-            document.getElementById('results-panel').classList.add('hidden');
+            
+            const mainExecuteBtn = document.getElementById('main-execute-btn');
+            if (mainExecuteBtn) {
+                if (tab === 'bench' || tab === 'rag') {
+                     mainExecuteBtn.classList.add('hidden'); 
+                } else {
+                     mainExecuteBtn.classList.remove('hidden');
+                }
+            }
         }
 
         function handleFileSelect(event) {
             const file = event.target.files[0];
             if (file) {
                 selectedFile = file;
-                document.getElementById('file-label').innerText = `Selected: ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+                renderSelectedFile('pdf', file);
+            }
+        }
+
+        function handleImageSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                selectedImageFile = file;
+                renderSelectedFile('image', file);
+            }
+        }
+
+        function renderSelectedFile(kind, file) {
+            document.getElementById(`${kind}-prompt-state`).classList.add('hidden');
+            const selectedState = document.getElementById(`${kind}-selected-state`);
+            selectedState.classList.remove('hidden');
+            selectedState.classList.add('flex');
+            document.getElementById(`${kind}-file-name`).innerText = file.name;
+            document.getElementById(`${kind}-file-size`).innerText = `${(file.size / 1024).toFixed(1)} KB`;
+        }
+
+        function clearSelectedFile(event, kind) {
+            event.stopPropagation();
+            if (kind === 'pdf') {
+                selectedFile = null;
+                document.getElementById('pdf-file').value = '';
+            } else {
+                selectedImageFile = null;
+                document.getElementById('image-file').value = '';
+            }
+            document.getElementById(`${kind}-selected-state`).classList.add('hidden');
+            document.getElementById(`${kind}-selected-state`).classList.remove('flex');
+            document.getElementById(`${kind}-prompt-state`).classList.remove('hidden');
+        }
+
+        function handleDragOver(event, dropzoneId) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById(dropzoneId).classList.add('border-black', 'bg-gray-100');
+        }
+
+        function handleDragLeave(event, dropzoneId) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById(dropzoneId).classList.remove('border-black', 'bg-gray-100');
+        }
+
+        function handleDrop(event, dropzoneId, kind, selectHandler) {
+            event.preventDefault();
+            event.stopPropagation();
+            document.getElementById(dropzoneId).classList.remove('border-black', 'bg-gray-100');
+
+            const file = event.dataTransfer.files[0];
+            if (!file) return;
+
+            const inputId = kind === 'pdf' ? 'pdf-file' : 'image-file';
+            const inputEl = document.getElementById(inputId);
+
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            inputEl.files = dataTransfer.files;
+
+            selectHandler({ target: { files: [file] } });
+        }
+
+        // --- NEW: External MCP Fetch Logic ---
+        async function fetchExternalMCP() {
+            const mcpUrl = document.getElementById('mcp-server-url').value;
+            const toolName = document.getElementById('mcp-server-tool').value;
+            const loading = document.getElementById('loading');
+            const resultsPanel = document.getElementById('results-panel');
+            
+            if (!mcpUrl || !toolName) {
+                alert('Please provide both the MCP Server URL and the Tool Name.');
+                return;
+            }
+
+            loading.classList.remove('hidden');
+            resultsPanel.classList.add('hidden');
+            
+            // Hide other output containers, show MCP container
+            document.getElementById('pdf-output-container').classList.add('hidden');
+            document.getElementById('chat-eval-container').classList.add('hidden');
+            document.getElementById('image-output-container').classList.add('hidden');
+            document.getElementById('mcp-output-container').classList.remove('hidden');
+
+            try {
+                const payload = {
+                    mcp_url: mcpUrl,
+                    tool_name: toolName,
+                    arguments: {} 
+                };
+
+                const response = await fetch(`${BACKEND_URL}/compress/mcp-external`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                if (!response.ok) throwBackendError(data);
+
+                console.log("Success! Updating UI metrics...");
+                updateMetrics(data, "External Fetch", data.compressed_yaml || "", 'mcp');
+
+                document.getElementById('mcp-raw-output').value = data.raw_json || "Raw JSON not available.";
+                document.getElementById('mcp-output-text').innerText = data.compressed_yaml || "No YAML generated.";
+                
+                resultsPanel.classList.remove('hidden');
+            } catch (err) {
+                alert(`Error: ${err.message}`);
+            } finally {
+                loading.classList.add('hidden');
             }
         }
 
@@ -178,17 +506,15 @@
                 let inputText = "";
 
                 if (currentTab === 'pdf') {
-                    // ==========================================
-                    // WEEK 3: PDF MAP-REDUCE COMPRESSION
-                    // ==========================================
                     if (!selectedFile) {
                         alert('Please select a PDF document first.');
                         loading.classList.add('hidden');
                         return;
                     }
                     
-                    // UI Toggle: Show PDF results, hide Chat Evaluation
                     document.getElementById('pdf-output-container').classList.remove('hidden');
+                    document.getElementById('mcp-output-container').classList.add('hidden');
+                    document.getElementById('image-output-container').classList.add('hidden');
                     document.getElementById('chat-eval-container').classList.add('hidden');
 
                     inputText = selectedFile.name; 
@@ -203,7 +529,6 @@
                     
                     if (!response.ok) throwBackendError(data);
 
-                    // Map PDF Metrics & Summary
                     updateMetrics(data, inputText, data.summary || "", 'pdf');
                     
                     let formattedSummary = (data.summary || "")
@@ -213,10 +538,66 @@
 
                     document.getElementById('output-text').innerHTML = formattedSummary || "<span class='text-gray-400'>No summary generated.</span>";
 
+                } else if (currentTab === 'mcp') {
+                    inputText = document.getElementById('mcp-payload').value;
+                    const toolName = document.getElementById('mcp-tool-name').value || "generic";
+                    
+                    if (!inputText.trim()) {
+                        alert('Please input a valid JSON payload.');
+                        loading.classList.add('hidden');
+                        return;
+                    }
+
+                    document.getElementById('pdf-output-container').classList.add('hidden');
+                    document.getElementById('chat-eval-container').classList.add('hidden');
+                    document.getElementById('image-output-container').classList.add('hidden');
+                    document.getElementById('mcp-output-container').classList.remove('hidden');
+
+                    const payload = {
+                        raw_json: inputText,
+                        tool_name: toolName
+                    };
+
+                    response = await fetch(`${BACKEND_URL}/compress/mcp`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    data = await response.json();
+                    
+                    if (!response.ok) throwBackendError(data);
+
+                    updateMetrics(data, inputText, data.compressed_yaml || "", 'mcp');
+                    document.getElementById('mcp-output-text').innerText = data.compressed_yaml || "No YAML generated.";
+
+                } else if (currentTab === 'image') {
+                    if (!selectedImageFile) {
+                        alert('Please select an image file first.');
+                        loading.classList.add('hidden');
+                        return;
+                    }
+
+                    document.getElementById('pdf-output-container').classList.add('hidden');
+                    document.getElementById('mcp-output-container').classList.add('hidden');
+                    document.getElementById('chat-eval-container').classList.add('hidden');
+                    document.getElementById('image-output-container').classList.remove('hidden');
+
+                    inputText = selectedImageFile.name; 
+                    const formData = new FormData();
+                    formData.append('file', selectedImageFile);
+
+                    response = await fetch(`${BACKEND_URL}/compress/image`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    data = await response.json();
+                    
+                    if (!response.ok) throwBackendError(data);
+
+                    updateMetrics(data, inputText, data.semantic_caption || "", 'image');
+                    document.getElementById('image-output-text').innerText = data.semantic_caption || "No caption generated.";
+
                 } else {
-                    // ==========================================
-                    // WEEK 2: CHAT DIFFERENTIAL EVALUATION
-                    // ==========================================
                     inputText = document.getElementById('chat-payload').value;
                     const newQuestion = document.getElementById('new-question').value;
                     
@@ -231,11 +612,11 @@
                         return;
                     }
 
-                    // UI Toggle: Hide PDF results, show Chat Evaluation
                     document.getElementById('pdf-output-container').classList.add('hidden');
+                    document.getElementById('mcp-output-container').classList.add('hidden');
+                    document.getElementById('image-output-container').classList.add('hidden');
                     document.getElementById('chat-eval-container').classList.remove('hidden');
 
-                    // Parse text into User/Assistant array
                     const rawLines = inputText.split('\n');
                     const messagesArray = [];
                     let currentRole = "user";
@@ -260,7 +641,6 @@
                         messagesArray.push({ role: "user", content: inputText });
                     }
 
-                    // Send to the Evaluation Endpoint
                     const payload = {
                         chat_history: messagesArray,
                         new_question: newQuestion
@@ -275,7 +655,6 @@
                     
                     if (!response.ok) throwBackendError(data);
 
-                    // Map Evaluation UI Data
                     updateMetrics(data, inputText, data.compressed_summary || "", 'chat');
                     
                     document.getElementById('output-path-a').innerText = data.path_a_answer || "N/A";
@@ -292,7 +671,155 @@
             }
         }
 
-        // --- Helper Function for Smart Errors ---
+        async function evaluatePDF() {
+            const question = document.getElementById('pdf-eval-question').value;
+            const summary = document.getElementById('output-text').innerText;
+            const loading = document.getElementById('loading');
+            const evalContainer = document.getElementById('chat-eval-container');
+
+            if (!question.trim()) {
+                alert('Please enter an evaluation question.');
+                return;
+            }
+            if (!selectedFile) {
+                alert('No PDF file found. Please upload and compress a PDF first.');
+                return;
+            }
+
+            loading.classList.remove('hidden');
+            document.getElementById('pdf-output-container').classList.add('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+                formData.append('summary', summary);
+                formData.append('question', question);
+
+                const response = await fetch(`${BACKEND_URL}/evaluate/pdf`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (!response.ok) throwBackendError(data);
+
+                document.getElementById('output-path-a').innerText = data.path_a_answer || "N/A";
+                document.getElementById('output-path-b').innerText = data.path_b_answer || "N/A";
+                document.getElementById('judge-score').innerText = `${data.judge_score}/100`;
+                document.getElementById('judge-reasoning').innerText = data.judge_reasoning || "";
+                
+                evalContainer.classList.remove('hidden');
+
+            } catch (err) {
+                alert(`Error: ${err.message}`);
+                document.getElementById('pdf-output-container').classList.remove('hidden');
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        let ws;
+        function startBenchmark() {
+            const terminal = document.getElementById('terminal-output');
+            const btn = document.getElementById('btn-run-bench');
+            
+            btn.disabled = true;
+            btn.innerText = "Running...";
+            btn.classList.add('opacity-50');
+            terminal.innerText = "Connecting to WebSocket...\n";
+            
+            ws = new WebSocket(`ws://${window.location.host}/ws/benchmark`);
+            
+            ws.onmessage = function(event) {
+                terminal.innerText += event.data + "\n";
+                terminal.scrollTop = terminal.scrollHeight;
+            };
+            
+            ws.onclose = function() {
+                btn.disabled = false;
+                btn.innerText = "Run Full Test Suite";
+                btn.classList.remove('opacity-50');
+            };
+            
+            ws.onerror = function() {
+                terminal.innerText += "\n[WEBSOCKET ERROR] Connection failed.\n";
+            };
+        }
+
+        async function ingestRAG() {
+            const fileInput = document.getElementById('rag-file-upload');
+            const statusDiv = document.getElementById('rag-ingest-status');
+            const loading = document.getElementById('loading');
+            
+            if (!fileInput.files[0]) {
+                alert("Please select a PDF file to embed.");
+                return;
+            }
+
+            loading.classList.remove('hidden');
+            statusDiv.classList.add('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                formData.append('kb_name', 'master_knowledge_base');
+
+                const response = await fetch(`${BACKEND_URL}/rag/ingest`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (!response.ok) throwBackendError(data);
+
+                statusDiv.innerHTML = `✅ <strong>Success:</strong> ${data.message}`;
+                statusDiv.classList.remove('hidden');
+                
+                fileInput.value = '';
+            } catch (err) {
+                alert(`Error: ${err.message}`);
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        async function queryRAG() {
+            const question = document.getElementById('rag-query-input').value;
+            const resultsContainer = document.getElementById('rag-results-container');
+            const loading = document.getElementById('loading');
+
+            if (!question.trim()) {
+                alert("Please enter a question to search.");
+                return;
+            }
+
+            loading.classList.remove('hidden');
+            resultsContainer.classList.add('hidden');
+
+            try {
+                const formData = new FormData();
+                formData.append('question', question);
+                formData.append('kb_name', 'master_knowledge_base');
+
+                const response = await fetch(`${BACKEND_URL}/rag/query`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (!response.ok) throwBackendError(data);
+
+                document.getElementById('rag-answer').innerText = data.answer;
+                document.getElementById('rag-sources').innerText = JSON.stringify(data.sources_used, null, 2);
+                
+                resultsContainer.classList.remove('hidden');
+            } catch (err) {
+                alert(`Error: ${err.message}`);
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
         function throwBackendError(data) {
             let errorMessage = 'API processing failure.';
             if (data && data.detail) {
@@ -307,7 +834,6 @@
             throw new Error(errorMessage);
         }
 
-        // --- Helper Function for Metrics Fallback ---
         function updateMetrics(data, inputText, rawSummaryText, tab) {
             let compTokens = data.compressed_token_count || data.compressed_tokens || Math.round(rawSummaryText.length / 4);
             let ratio = data.compression_ratio || 0;
@@ -331,6 +857,16 @@
 
         function copyToClipboard() {
             const text = document.getElementById('output-text').innerText;
+            navigator.clipboard.writeText(text);
+        }
+
+        function copyToClipboardMCP() {
+            const text = document.getElementById('mcp-output-text').innerText;
+            navigator.clipboard.writeText(text);
+        }
+
+        function copyToClipboardImage() {
+            const text = document.getElementById('image-output-text').innerText;
             navigator.clipboard.writeText(text);
         }
     </script>
